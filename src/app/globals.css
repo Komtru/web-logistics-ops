@@ -1,0 +1,285 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ---------------------------------------------------------------------------
+ * Komtru brand tokens.
+ * Source of truth for colour. Components must use the generated utility
+ * classes (bg-komtru-navy, text-komtru-slate-500, ...) — never raw hex.
+ * ------------------------------------------------------------------------- */
+@theme {
+  /* Core brand */
+  --color-komtru-navy: #0d1420;
+  --color-komtru-charcoal: #1a2333;
+  --color-komtru-blue: #4552d6;
+  --color-komtru-blue-soft: #edeffc;
+  --color-komtru-cyan: #159768;
+  --color-komtru-cyan-soft: #e5f5ee;
+  --color-komtru-gold: #b9791f;
+  --color-komtru-gold-soft: #fbf0dd;
+  --color-komtru-risk: #c0392e;
+  --color-komtru-risk-soft: #fbeae8;
+
+  /* Neutral ramp */
+  --color-komtru-gray: #9aa5b8;
+  --color-komtru-slate-50: #f7f9fc;
+  --color-komtru-slate-100: #eef1f5;
+  --color-komtru-slate-200: #e5e9f0;
+  --color-komtru-slate-300: #cdd4e0;
+  --color-komtru-slate-400: #9aa5b8;
+  --color-komtru-slate-500: #6b7688;
+  --color-komtru-slate-600: #4c5568;
+  --color-komtru-slate-700: #333d4f;
+  --color-komtru-slate-800: #1f2836;
+  --color-komtru-slate-900: #101725;
+
+  /* Semantic surfaces used by trust chips + status rails */
+  --color-komtru-success: #159768;
+  --color-komtru-success-soft: #e5f5ee;
+  --color-komtru-success-on-soft: #0c6b49;
+  --color-komtru-info: #4552d6;
+  --color-komtru-info-soft: #edeffc;
+  --color-komtru-info-on-soft: #3843ad;
+  --color-komtru-warning: #b9791f;
+  --color-komtru-warning-soft: #fbf0dd;
+  --color-komtru-warning-on-soft: #7a4e12;
+  --color-komtru-risk-on-soft: #a12e25;
+
+  /* Typography */
+  --font-display: var(--font-space-grotesk), 'Inter', sans-serif;
+  --font-body: var(--font-inter), -apple-system, sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), 'SFMono-Regular', monospace;
+
+  /* Motion */
+  --animate-duration-fast: 150ms;
+  --animate-duration-standard: 250ms;
+  --animate-duration-trust: 400ms;
+}
+
+/* ---------------------------------------------------------------------------
+ * shadcn/ui variable layer (light + dark). Every colour has a dark twin.
+ * ------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --radius: 0.625rem;
+
+    --background: #f5f7fa;
+    --foreground: #101725;
+    --card: #ffffff;
+    --card-foreground: #101725;
+    --popover: #ffffff;
+    --popover-foreground: #101725;
+    --primary: #4552d6;
+    --primary-foreground: #ffffff;
+    --secondary: #eef1f5;
+    --secondary-foreground: #1f2836;
+    --muted: #eef1f5;
+    --muted-foreground: #6b7688;
+    --accent: #e5f5ee;
+    --accent-foreground: #0c6b49;
+    --destructive: #c0392e;
+    --destructive-foreground: #ffffff;
+    --border: #e3e8f0;
+    --input: #e5e9f0;
+    --ring: #4552d6;
+
+    --chart-1: #4552d6;
+    --chart-2: #159768;
+    --chart-3: #b9791f;
+    --chart-4: #6b7688;
+    --chart-5: #c0392e;
+
+    /* Sidebar shares the shell base so the two panes read as one surface. */
+    --sidebar: #f5f7fa;
+    --sidebar-foreground: #333d4f;
+    --sidebar-primary: #4552d6;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgb(69 82 214 / 0.1);
+    --sidebar-accent-foreground: #3843ad;
+    --sidebar-border: rgb(16 23 37 / 0.08);
+    --sidebar-ring: #4552d6;
+
+    /* Shell blend, consumed by `shell-blend`. Komtru Midnight (#0d1420) is the
+     * primary: in light mode it's the tint hazing the cloud base, and indigo is
+     * only a trace accent so the wash never reads as a blue gradient. */
+    --shell-base: #f5f7fa;
+    --shell-midnight: rgb(13 20 32 / 0.07);
+    --shell-accent: rgb(69 82 214 / 0.04);
+    --shell-deep: rgb(13 20 32 / 0.05);
+    --shell-crest: rgb(255 255 255 / 0.8);
+    --veil: rgb(255 255 255 / 0.78);
+    --veil-line: rgb(16 23 37 / 0.07);
+  }
+
+  .dark {
+    --background: #0d1420;
+    --foreground: #eef1f5;
+    --card: #141d2b;
+    --card-foreground: #eef1f5;
+    --popover: #161f2e;
+    --popover-foreground: #eef1f5;
+    --primary: #7b85e6;
+    --primary-foreground: #0d1420;
+    --secondary: #1f2836;
+    --secondary-foreground: #eef1f5;
+    --muted: #1f2836;
+    --muted-foreground: #9aa5b8;
+    --accent: #12352a;
+    --accent-foreground: #6fd6a9;
+    --destructive: #e2685c;
+    --destructive-foreground: #0d1420;
+    --border: #1c2534;
+    --input: #273040;
+    --ring: #7b85e6;
+
+    --chart-1: #7b85e6;
+    --chart-2: #3fbd8c;
+    --chart-3: #d9a05a;
+    --chart-4: #9aa5b8;
+    --chart-5: #e2685c;
+
+    --sidebar: #0d1420;
+    --sidebar-foreground: #cdd4e0;
+    --sidebar-primary: #7b85e6;
+    --sidebar-primary-foreground: #0d1420;
+    --sidebar-accent: rgb(123 133 230 / 0.16);
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: rgb(255 255 255 / 0.07);
+    --sidebar-ring: #7b85e6;
+
+    /* Midnight is the base *and* the modulation: the wash is a luminance ramp
+     * within the brand's own family (charcoal lift → deep midnight), with a
+     * trace of indigo so it isn't dead flat. */
+    --shell-base: #0d1420;
+    --shell-midnight: rgb(26 35 51 / 0.75);
+    --shell-accent: rgb(69 82 214 / 0.07);
+    --shell-deep: rgb(7 11 19 / 0.85);
+    --shell-crest: rgb(255 255 255 / 0.035);
+    --veil: rgb(255 255 255 / 0.032);
+    --veil-line: rgb(255 255 255 / 0.07);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Bridge the shadcn variables above into Tailwind utilities (bg-card, etc.).
+ *
+ * NOTE: `inline` means these names are compiled into the utilities and are NOT
+ * emitted as CSS custom properties. So `var(--color-chart-1)` resolves to
+ * nothing at runtime. If a library needs a colour *string* rather than a class
+ * (recharts `stroke`, for example), point it at the emitted property —
+ * `var(--chart-1)`, `var(--border)`, `var(--card)` — declared in `:root`/`.dark`
+ * above, which stays theme-aware.
+ * ------------------------------------------------------------------------- */
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display tracking-[-0.01em];
+  }
+
+  :focus-visible {
+    @apply outline-komtru-blue rounded-[4px] outline-2 outline-offset-2;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * App-level utilities.
+ * ------------------------------------------------------------------------- */
+@utility trade-code {
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/**
+ * The shell wash. Sits on the element that spans sidebar + content so both
+ * panes sample one continuous gradient instead of meeting at a seam.
+ *
+ * Komtru Midnight is the primary colour: the base tone, the top-left haze and
+ * the far-corner settle all come from it, and indigo appears only as a trace so
+ * the result reads as brand midnight rather than as a blue gradient. Order
+ * matters — midnight lifts first, the deep corner sits under it.
+ *
+ * `background-attachment: fixed` anchors the wash to the viewport, which is
+ * what keeps the fixed sidebar and the scrolling content in register — without
+ * it the two drift apart as soon as the page scrolls.
+ */
+@utility shell-blend {
+  background-color: var(--shell-base);
+  background-image:
+    radial-gradient(80rem 46rem at 6% -10%, var(--shell-midnight), transparent 64%),
+    radial-gradient(58rem 32rem at 98% 2%, var(--shell-accent), transparent 56%),
+    radial-gradient(70rem 48rem at 88% 108%, var(--shell-deep), transparent 60%),
+    linear-gradient(180deg, var(--shell-crest), transparent 38%);
+  background-attachment: fixed;
+}
+
+/**
+ * A panel that lifts off the wash rather than covering it: translucent fill,
+ * hairline edge, no shadow. Radius is computed from `--radius` because the
+ * `--radius-*` names live in `@theme inline` and aren't emitted at runtime.
+ */
+@utility surface-veil {
+  background-color: var(--veil);
+  border: 1px solid var(--veil-line);
+  border-radius: calc(var(--radius) + 4px);
+  backdrop-filter: blur(12px) saturate(1.05);
+}
+
+/* Hide scrollbars on horizontal rails without losing keyboard scroll. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

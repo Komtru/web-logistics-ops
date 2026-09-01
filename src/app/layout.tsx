@@ -9,8 +9,9 @@ import { BRAND } from '@/config/brand';
 
 import './globals.css';
 
+// Turbopack inlines unset `NEXT_PUBLIC_*` reads as '', so test truthiness, not nullishness.
 const appUrl =
-  process.env.NEXT_PUBLIC_APP_URL ??
+  process.env.NEXT_PUBLIC_APP_URL ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:7830');
 
 export const metadata: Metadata = {

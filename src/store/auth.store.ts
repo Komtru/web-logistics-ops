@@ -24,6 +24,7 @@ export const useAuthStore = create<IAuthStore>()(
       user: null,
       organization: null,
       staff: null,
+      logistics: null,
       profile: null,
       hydrated: false,
 
@@ -33,6 +34,21 @@ export const useAuthStore = create<IAuthStore>()(
           user,
           organization: organization ?? null,
           staff: staff ?? null,
+          access: tokens.access,
+          refresh: tokens.refresh,
+        }),
+
+      /**
+       * Commits a LOGISTICS-scoped session. Deliberately does not touch
+       * `staff`/`organization` — a Logistics login never carries either — so
+       * a stale Staff session can't bleed into a Logistics one on the same
+       * browser (`logoutAccount` already clears both on sign-out anyway).
+       */
+      initLogisticsStore: ({ auth, user, logistics, tokens }) =>
+        set({
+          auth,
+          user,
+          logistics,
           access: tokens.access,
           refresh: tokens.refresh,
         }),
@@ -92,6 +108,7 @@ export const useAuthStore = create<IAuthStore>()(
           user: null,
           organization: null,
           staff: null,
+          logistics: null,
           profile: null,
         }),
     }),
@@ -105,6 +122,7 @@ export const useAuthStore = create<IAuthStore>()(
         user: state.user,
         organization: state.organization,
         staff: state.staff,
+        logistics: state.logistics,
         profile: state.profile,
       }),
       onRehydrateStorage: () => (state) => {

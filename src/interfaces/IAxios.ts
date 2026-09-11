@@ -57,6 +57,16 @@ export interface RequestError {
   code?: number | string;
   message: string;
   errors?: Record<string, string[]>;
+  /**
+   * Machine-readable error identifier the API sends alongside `message` for
+   * errors a caller needs to branch on specifically — e.g. `NO_LOGISTICS_ACCESS`
+   * (`POST auth/logistics/login`), `LAST_ADMIN`, `ALREADY_HAS_ACTIVE_COMPANY`.
+   * Optional because most endpoints don't send one — Staff auth failures
+   * deliberately don't, since a distinguishable code would tell an attacker
+   * their stolen token tripped the alarm — so this is opt-in per error, not
+   * a contract every endpoint must fill.
+   */
+  errorCode?: string;
 }
 
 /** A downloaded blob plus the filename parsed from `content-disposition`. */

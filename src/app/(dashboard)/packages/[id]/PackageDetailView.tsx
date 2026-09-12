@@ -26,16 +26,17 @@ import {
   NEXT_ADVANCE_STATUS,
   PACKAGE_PIPELINE_STAGES,
   type LogisticsPackage,
+  type LogisticsPackageDetail,
   type LogisticsPackageStatus,
+  type LogisticsPackageUserRef,
 } from '@/interfaces/logisticsPackage';
 import {
   useAcceptPackage,
   useAdvancePackage,
   useDeliverPackage,
-  usePackageFromList,
+  useLogisticsPackage,
   useRejectPackage,
 } from '@/services/logisticsPackage.services';
-import { useAuthStore } from '@/store/auth.store';
 
 const STAGE_TIMESTAMP_KEY: Record<LogisticsPackageStatus, keyof LogisticsPackage | null> = {
   REQUESTED: 'requestedAt',
@@ -48,16 +49,17 @@ const STAGE_TIMESTAMP_KEY: Record<LogisticsPackageStatus, keyof LogisticsPackage
 };
 
 /**
- * One package's full detail view: trade info, creator info, timeline,
- * tracking, and actions — accept/reject only from here after review.
+ * One package's full detail view: trade info, requester, assigned operator,
+ * timeline, tracking, and actions — accept/reject only from here after
+ * review.
  *
- * Sourced from the already-fetched package LIST, not a dedicated detail
- * call — there is no company-scoped `GET /logistics/packages/:id` route
- * wired up yet. See `usePackageFromList`'s doc comment.
+ * Sourced from the company-scoped `GET /logistics/packages/:id` detail
+ * endpoint, which also returns `tradeSummary`, `requester`, and
+ * `assignedOperator` — no more reading a package out of the unfiltered
+ * list. See `useLogisticsPackage`.
  */
 export function PackageDetailView({ packageId }: { packageId: string }) {
-  const { pkg, isLoading, error, refetch } = usePackageFromList(packageId);
-  const logistics = useAuthStore((state) => state.logistics);
+  const { data: pkg, isLoading, error, refetch } = useLogisticsPackage(packageId);
 
   return (
     <div className="space-y-5">
@@ -79,19 +81,23 @@ export function PackageDetailView({ packageId }: { packageId: string }) {
         emptyTitle="Package not found"
         emptyDescription="This package request may have been removed, or the link may be out of date."
       >
-        {pkg ? <PackageDetailContent pkg={pkg} logisticsCompany={logistics?.companyName} /> : null}
+        {pkg ? <PackageDetailContent pkg={pkg} /> : null}
       </QueryState>
     </div>
   );
 }
 
-function PackageDetailContent({ pkg, logisticsCompany }: { pkg: LogisticsPackage; logisticsCompany?: string }) {
+function PackageDetailContent({ pkg }: { pkg: LogisticsPackageDetail }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Trade {pkg.tradeId.slice(0, 8)}…</h1>
-          <p className="text-muted-foreground text-[12.5px]">Package {pkg.id.slice(0, 8)}…</p>
+          <h1 className="text-xl font-semibold">
+            {pkg.tradeSummary?.title ?? `Trade ${pkg.tradeId.slice(0, 8)}…`}
+          </h1>
+          <p className="text-muted-foreground text-[12.5px]">
+            {pkg.tradeSummary?.tradeCode ?? `Package ${pkg.id.slice(0, 8)}…`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant={pkg.status === 'REJECTED' ? 'outline' : 'default'}>
@@ -102,61 +108,90 @@ function PackageDetailContent({ pkg, logisticsCompany }: { pkg: LogisticsPackage
 
       <div className="grid gap-4 md:grid-cols-2">
         <TradeInfoSection pkg={pkg} />
-        <CreatorInfoSection pkg={pkg} logisticsCompany={logisticsCompany} />
+        <CreatorInfoSection pkg={pkg} />
       </div>
 
-      {pkg.status === 'REJECTED' ? (
-        <RejectionCard pkg={pkg} />
-      ) : (
-        <PipelineSection pkg={pkg} />
-      )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <UserRefCard title="Requester" user={pkg.requester} />
+        <UserRefCard title="Assigned Operator" user={pkg.assignedOperator} emptyText="Not yet assigned." />
+      </div>
+
+      {pkg.status === 'REJECTED' ? <RejectionCard pkg={pkg} /> : <PipelineSection pkg={pkg} />}
 
       <TrackingInfoSection pkg={pkg} />
     </div>
   );
 }
 
-function TradeInfoSection({ pkg }: { pkg: LogisticsPackage }) {
+function TradeInfoSection({ pkg }: { pkg: LogisticsPackageDetail }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-[13.5px]">Trade Information</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <InfoRow label="Trade ID" value={pkg.tradeId} mono />
+        <InfoRow label="Trade Code" value={pkg.tradeSummary?.tradeCode ?? pkg.tradeId} mono />
+        <InfoRow label="Item" value={pkg.tradeSummary?.title ?? '—'} />
         <InfoRow label="Package ID" value={pkg.id} mono />
         <InfoRow label="Status" value={formatEnum(pkg.status)} />
         <InfoRow label="Requested At" value={pkg.requestedAt ? formatDateTime(pkg.requestedAt) : '—'} />
         <InfoRow label="Created At" value={pkg.createdAt ? formatDateTime(pkg.createdAt) : '—'} />
-        {pkg.assignedOperatorId ? (
-          <InfoRow label="Assigned Operator" value={pkg.assignedOperatorId} mono />
-        ) : null}
       </CardContent>
     </Card>
   );
 }
 
-function CreatorInfoSection({ pkg, logisticsCompany }: { pkg: LogisticsPackage; logisticsCompany?: string }) {
+function CreatorInfoSection({ pkg }: { pkg: LogisticsPackageDetail }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-[13.5px]">Creator & Company</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <InfoRow label="Requested By (User ID)" value={pkg.requestedByUserId} mono />
-        {logisticsCompany ? (
-          <InfoRow label="Logistics Company" value={logisticsCompany} />
-        ) : null}
-        {pkg.companyId ? (
-          <InfoRow label="Company ID" value={pkg.companyId} mono />
-        ) : null}
+        <InfoRow label="Requested By" value={userRefLabel(pkg.requester)} />
+        {pkg.companyName ? <InfoRow label="Logistics Company" value={pkg.companyName} /> : null}
+        <InfoRow label="Company ID" value={pkg.companyId} mono />
         <InfoRow label="Created" value={pkg.createdAt ? formatDateTime(pkg.createdAt) : '—'} />
       </CardContent>
     </Card>
   );
 }
 
-function RejectionCard({ pkg }: { pkg: LogisticsPackage }) {
+function UserRefCard({
+  title,
+  user,
+  emptyText = 'No details available.',
+}: {
+  title: string;
+  user: LogisticsPackageUserRef | null;
+  emptyText?: string;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-[13.5px]">{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {user ? (
+          <>
+            <InfoRow label="Name" value={userRefLabel(user)} />
+            {user.username ? <InfoRow label="Username" value={user.username} /> : null}
+            {user.emailMasked ? <InfoRow label="Email" value={user.emailMasked} /> : null}
+            <InfoRow label="User ID" value={user.userId} mono />
+          </>
+        ) : (
+          <p className="text-muted-foreground text-[12px]">{emptyText}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function userRefLabel(user: LogisticsPackageUserRef): string {
+  return user.displayName ?? user.username ?? user.userId;
+}
+
+function RejectionCard({ pkg }: { pkg: LogisticsPackageDetail }) {
   return (
     <Card>
       <CardContent className="pt-6">
@@ -174,7 +209,7 @@ function RejectionCard({ pkg }: { pkg: LogisticsPackage }) {
   );
 }
 
-function PipelineSection({ pkg }: { pkg: LogisticsPackage }) {
+function PipelineSection({ pkg }: { pkg: LogisticsPackageDetail }) {
   return (
     <Card>
       <CardHeader>
@@ -190,7 +225,7 @@ function PipelineSection({ pkg }: { pkg: LogisticsPackage }) {
   );
 }
 
-function PipelineStepper({ pkg }: { pkg: LogisticsPackage }) {
+function PipelineStepper({ pkg }: { pkg: LogisticsPackageDetail }) {
   const currentIndex = PACKAGE_PIPELINE_STAGES.indexOf(pkg.status);
 
   return (
@@ -242,7 +277,7 @@ function PipelineStepper({ pkg }: { pkg: LogisticsPackage }) {
   );
 }
 
-function TrackingInfoSection({ pkg }: { pkg: LogisticsPackage }) {
+function TrackingInfoSection({ pkg }: { pkg: LogisticsPackageDetail }) {
   return (
     <Card>
       <CardHeader>
@@ -261,7 +296,7 @@ function TrackingInfoSection({ pkg }: { pkg: LogisticsPackage }) {
   );
 }
 
-function StageAction({ pkg }: { pkg: LogisticsPackage }) {
+function StageAction({ pkg }: { pkg: LogisticsPackageDetail }) {
   const { showToast } = useCustomToast();
   const accept = useAcceptPackage();
   const reject = useRejectPackage();

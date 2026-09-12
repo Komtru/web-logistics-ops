@@ -2,25 +2,19 @@ import type { ISODateString } from '@/interfaces/common';
 
 /**
  * Types for the logistics portal's package request pipeline —
- * `GET /logistics/packages`, `POST /logistics/packages/:id/{accept,reject,advance,deliver}`.
+ * `GET /logistics/packages`, `GET /logistics/packages/:id`,
+ * `POST /logistics/packages/:id/{accept,reject,advance,deliver}`.
  *
  * REVISED against the real backend (`package.service.ts`, `domain/package.ts`,
- * `controllers.ts`, `routes.ts` on `feat/m2-logistics-packages`).
+ * `controllers.ts`, `routes.ts` on `feat/m2-logistics-packages`, plus the
+ * company-scoped detail route added on `work/logistics`).
  *
- * Two confirmed, load-bearing facts:
- *
- * 1. A package row carries only `tradeId` — no nested trade summary, no
- *    item description, no seller name. Same gap as the member roster: until
- *    a trade-lookup endpoint exists, the UI can only show a raw `tradeId`.
- *
- * 2. There is NO company-scoped `GET /logistics/packages/:id` route wired up
- *    yet (`logisticsRouter` in `routes.ts` has no such route) — although the
- *    underlying `getPackageDetail(packageId, companyId?, executor?)` service
- *    function already supports being called that way, so this is a route
- *    that's one line away from existing, not a real gap in the data model.
- *    Until it's wired up, the detail screen reads the package out of the
- *    already-fetched list instead of a separate network call — see
- *    `services/logisticsPackage.services.ts`'s `usePackageFromList`.
+ * `GET /logistics/packages/:id` is now wired up on the company-scoped
+ * router and returns richer data than the list endpoint: `companyName`,
+ * a `requester` and `assignedOperator` user reference (instead of raw
+ * `requestedByUserId` / `assignedOperatorId` strings), a `tradeSummary`
+ * (instead of a raw `tradeId`), and the full `events` audit trail. See
+ * `services/logisticsPackage.services.ts`'s `useLogisticsPackage`.
  */
 
 export type LogisticsPackageStatus =
@@ -93,8 +87,46 @@ export interface LogisticsPackageStatusEvent {
   createdAt: ISODateString;
 }
 
-/** `getPackageDetail`'s shape — a package plus its full event history. Not reachable via a company-scoped route yet; see this file's module doc comment. */
+/**
+ * A user reference attached to package detail — used for both `requester`
+ * (the merchant/seller who requested the courier) and `assignedOperator`
+ * (the courier POC assigned to the package). `displayName`/`username`/
+ * `emailMasked` are all optional since the backend may not have every field
+ * populated for every user.
+ */
+export interface LogisticsPackageUserRef {
+  userId: string;
+  displayName?: string;
+  username?: string;
+  emailMasked?: string;
+}
+
+/**
+ * Minimal trade context attached to package detail, so the UI can show a
+ * human-readable trade code and item title instead of a raw `tradeId`.
+ */
+export interface LogisticsPackageTradeSummary {
+  tradeId: string;
+  tradeCode: string;
+  title: string;
+  amountMinor: number;
+  currency: string;
+}
+
+/**
+ * `GET /logistics/packages/:id`'s response shape — a package plus
+ * `companyName`, `requester`/`assignedOperator` user references, a
+ * `tradeSummary`, and the full status-event audit trail.
+ *
+ * `assignedOperator` is nullable, mirroring the base package's
+ * `assignedOperatorId: string | null` — a package can still be unassigned
+ * (e.g. immediately after being requested, before anyone accepts it).
+ */
 export interface LogisticsPackageDetail extends LogisticsPackage {
+  companyName: string;
+  requester: LogisticsPackageUserRef;
+  assignedOperator: LogisticsPackageUserRef | null;
+  tradeSummary: LogisticsPackageTradeSummary;
   events: LogisticsPackageStatusEvent[];
 }
 

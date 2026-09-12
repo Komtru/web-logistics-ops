@@ -5,6 +5,7 @@ import type { RequestError } from '@/interfaces/IAxios';
 import type {
   AdvancePackagePayload,
   LogisticsPackage,
+  LogisticsPackageDetail,
   LogisticsPackageListParams,
   LogisticsPackageListResult,
   RejectPackagePayload,
@@ -13,13 +14,12 @@ import { http } from '@/services/base';
 
 /**
  * The logistics portal's own package request pipeline — `GET /logistics/packages`,
- * `POST /logistics/packages/:id/{accept,reject,advance,deliver}`. Confirmed
- * against the real backend (`package.service.ts`, `domain/package.ts`,
- * `controllers.ts`, `routes.ts` on `feat/m2-logistics-packages`); see
- * `interfaces/logisticsPackage.ts` for the two load-bearing gaps this
- * uncovered (no trade summary per package, and no company-scoped detail
- * route wired up yet — though the service function underneath already
- * supports one).
+ * `GET /logistics/packages/:id`, `POST /logistics/packages/:id/{accept,reject,advance,deliver}`.
+ * Confirmed against the real backend (`package.service.ts`, `domain/package.ts`,
+ * `controllers.ts`, `routes.ts` on `feat/m2-logistics-packages`, plus the
+ * company-scoped detail route added on `work/logistics`); see
+ * `interfaces/logisticsPackage.ts` for the richer shape `GET /logistics/packages/:id`
+ * returns (companyName, requester, assignedOperator, tradeSummary, events).
  *
  * Every endpoint here is implicitly scoped to the caller's own company, same
  * as `logisticsMember.services.ts` — nothing sends a `companyId`.
@@ -28,6 +28,7 @@ export const logisticsPackageKeys = {
   all: ['logistics-packages'] as const,
   list: (params?: LogisticsPackageListParams) =>
     [...logisticsPackageKeys.all, 'list', params ?? {}] as const,
+  detail: (packageId: string) => [...logisticsPackageKeys.all, 'detail', packageId] as const,
 };
 
 /** `GET /logistics/packages` — the company's package requests, `status` filter, `page`/`limit` pagination. */
@@ -45,26 +46,25 @@ export function useLogisticsPackages(params?: LogisticsPackageListParams) {
 }
 
 /**
- * Reads one package out of the already-fetched, UNFILTERED list rather than
- * a dedicated `GET /logistics/packages/:id` call — that route does not
- * exist on the company-scoped router yet (`routes.ts` only wires the admin
- * one, `adminGetPackageDetailController`), even though the service function
- * underneath (`getPackageDetail(packageId, companyId?)`) already supports
- * being called this way. This is the correct stopgap until a one-line route
- * addition lands server-side, not a permanent design — once
- * `GET /logistics/packages/:id` exists, swap this for a real `useQuery`
- * keyed on the id, the same shape `useLogisticsMembers` already has.
+ * `GET /logistics/packages/:id` — company-scoped package detail: the base
+ * package fields plus `companyName`, `requester`/`assignedOperator` user
+ * references, a `tradeSummary`, and the full status-event audit trail.
  *
- * Fetches the unfiltered list (not just whatever filter the list screen
- * happens to have active) so a direct link to a detail page works
- * regardless of which status filter was last selected there.
+ * Replaces the old `usePackageFromList` stopgap now that this dedicated
+ * route is wired up server-side — no more reading a package out of the
+ * unfiltered list just to render a detail page.
  */
-export function usePackageFromList(packageId: string) {
-  const { data, isLoading, error, refetch } = useLogisticsPackages();
-
-  const pkg = data?.packages.find((candidate) => candidate.id === packageId) ?? null;
-
-  return { pkg, isLoading, error, refetch };
+export function useLogisticsPackage(packageId: string) {
+  return useQuery<LogisticsPackageDetail, RequestError>({
+    queryKey: logisticsPackageKeys.detail(packageId),
+    queryFn: async () => {
+      const response = await http.get<AuthEnvelope<LogisticsPackageDetail>>({
+        url: `logistics/packages/${packageId}`,
+      });
+      return response.data;
+    },
+    enabled: !!packageId,
+  });
 }
 
 /** `POST /logistics/packages/:id/accept` — accept a `REQUESTED` package request. */

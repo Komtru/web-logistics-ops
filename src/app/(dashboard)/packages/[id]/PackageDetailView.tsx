@@ -106,10 +106,7 @@ function PackageDetailContent({ pkg }: { pkg: LogisticsPackageDetail }) {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <TradeInfoSection pkg={pkg} />
-        <CreatorInfoSection pkg={pkg} />
-      </div>
+      <TradeInfoSection pkg={pkg} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <UserRefCard title="Requester" user={pkg.requester} />
@@ -136,22 +133,6 @@ function TradeInfoSection({ pkg }: { pkg: LogisticsPackageDetail }) {
         <InfoRow label="Status" value={formatEnum(pkg.status)} />
         <InfoRow label="Requested At" value={pkg.requestedAt ? formatDateTime(pkg.requestedAt) : '—'} />
         <InfoRow label="Created At" value={pkg.createdAt ? formatDateTime(pkg.createdAt) : '—'} />
-      </CardContent>
-    </Card>
-  );
-}
-
-function CreatorInfoSection({ pkg }: { pkg: LogisticsPackageDetail }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-[13.5px]">Creator & Company</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        <InfoRow label="Requested By" value={userRefLabel(pkg.requester)} />
-        {pkg.companyName ? <InfoRow label="Logistics Company" value={pkg.companyName} /> : null}
-        <InfoRow label="Company ID" value={pkg.companyId} mono />
-        <InfoRow label="Created" value={pkg.createdAt ? formatDateTime(pkg.createdAt) : '—'} />
       </CardContent>
     </Card>
   );
@@ -227,13 +208,18 @@ function PipelineSection({ pkg }: { pkg: LogisticsPackageDetail }) {
 
 function PipelineStepper({ pkg }: { pkg: LogisticsPackageDetail }) {
   const currentIndex = PACKAGE_PIPELINE_STAGES.indexOf(pkg.status);
+  // DELIVERED is terminal — the last stage should render as done (filled
+  // check), not "active" (outlined number), once there's nothing left to
+  // advance to. Every other status is still mid-pipeline, so its current
+  // stage stays "active" rather than "done".
+  const isDelivered = pkg.status === 'DELIVERED';
 
   return (
     <div className="space-y-6">
       <div className="flex items-center">
         {PACKAGE_PIPELINE_STAGES.map((stage, index) => {
-          const done = index < currentIndex;
-          const active = index === currentIndex;
+          const done = index < currentIndex || (isDelivered && index === currentIndex);
+          const active = index === currentIndex && !isDelivered;
           const timestampKey = STAGE_TIMESTAMP_KEY[stage];
           const timestamp = timestampKey ? (pkg[timestampKey] as string | null) : null;
 

@@ -41,9 +41,15 @@ const STATUS_VARIANT: Record<LogisticsCompanyMember['status'], 'default' | 'seco
   REMOVED: 'outline',
 };
 
-/** No display info exists on a member row yet — see `interfaces/logistics.ts`'s module doc comment. */
+/**
+ * The name shown for a member row. Member rows always carry a `user`
+ * object now (see `interfaces/logistics.ts`'s module doc comment) — a
+ * person invited without an existing account never becomes a member row at
+ * all, so `member.user` should never actually be missing here. The raw
+ * `userId` fallback only guards against an unexpected gap in that data.
+ */
 function memberLabel(member: LogisticsCompanyMember): string {
-  return `User ${member.userId.slice(0, 8)}…`;
+  return member.user?.displayName ?? member.user?.email ?? `User ${member.userId.slice(0, 8)}…`;
 }
 
 /**
@@ -180,7 +186,12 @@ function MemberRow({ member, isAdmin }: { member: LogisticsCompanyMember; isAdmi
   return (
     <TableRow>
       <TableCell>
-        <p className="text-[12.5px] font-medium">{label}</p>
+        <div className="flex flex-col">
+          <p className="text-[12.5px] font-medium">{label}</p>
+          {member.user?.email ? (
+            <p className="text-muted-foreground text-[11px]">{member.user.email}</p>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell>
         <span className="inline-flex items-center gap-1 text-[12.5px]">

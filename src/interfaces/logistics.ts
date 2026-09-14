@@ -6,21 +6,20 @@ import type { ISODateString } from '@/interfaces/common';
  *
  * REVISED against the real backend (`companyMember.service.ts`,
  * `memberInvitation.service.ts`, `controllers.ts`, `routes.ts` on
- * `feat/m2-logistics-packages`), replacing the earlier guessed shapes.
+ * `feat/m2-logistics-packages`, plus the `user` details now attached to
+ * each member row on `work/logistics`), replacing the earlier guessed
+ * shapes.
  *
- * Two confirmed, load-bearing facts that change how the roster screen works:
+ * Confirmed, load-bearing facts that shape how the roster screen works:
  *
  * 1. `GET /logistics/members` returns `{ members: LogisticsCompanyMember[] }`
  *    — a bare array, no pagination envelope. There is no `page`/`limit`/
  *    `total` here, unlike packages.
  *
- * 2. A member row carries NO display information — no email, phone,
- *    username, or name. Just `userId` and the relationship's own columns.
- *    The `name` field `POST /logistics/members` accepts is not stored on
- *    the member row at all (see `InviteLogisticsMemberPayload` below) — it
- *    exists only so the inviting admin can note who they meant, nowhere
- *    else. Until a user-lookup endpoint exists, the roster can only display
- *    a raw `userId` for each row — flagged directly in `TeamView.tsx`.
+ * 2. A member row now carries a nested `user` object (`id`, `publicId`,
+ *    `displayName`, `avatarUrl`, `email` (masked), `phone` (masked)) — the
+ *    roster no longer needs to fall back to a raw `userId` label for any
+ *    row that has an active account, which is every row here (see fact 3).
  *
  * 3. A person invited with NO existing Kumtru account never gets a member
  *    row at all — they get a `logistics_member_invitations` row instead,
@@ -35,11 +34,26 @@ export type LogisticsMemberRole = 'ADMIN' | 'OPERATOR';
 
 export type LogisticsMemberStatus = 'INVITED' | 'ACTIVE' | 'REMOVED';
 
+/**
+ * The account details attached to a member row. `displayName`/`avatarUrl`
+ * are nullable since a user may not have set either; `email`/`phone` are
+ * masked (e.g. `m•••@gmail.com`, `+234916•••8813`), never the raw value.
+ */
+export interface LogisticsMemberUserRef {
+  id: string;
+  publicId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
 /** One row of `GET /logistics/members` — exactly `LogisticsCompanyMemberView` server-side. */
 export interface LogisticsCompanyMember {
   id: string;
   companyId: string;
   userId: string;
+  user: LogisticsMemberUserRef;
   role: LogisticsMemberRole;
   status: LogisticsMemberStatus;
   invitedByUserId: string | null;

@@ -40,7 +40,6 @@ type ContactMethod = 'email' | 'phone';
 interface FormValues {
   contactMethod: ContactMethod;
   contactValue: string;
-  name: string;
   role: LogisticsMemberRole;
 }
 
@@ -53,14 +52,12 @@ const schema = Yup.object({
       is: 'email',
       then: (s) => s.email('Enter a valid email.'),
     }),
-  name: Yup.string().trim(),
   role: Yup.string().oneOf(['ADMIN', 'OPERATOR']).required('Choose a role.'),
 });
 
 const INITIAL_VALUES: FormValues = {
   contactMethod: 'email',
   contactValue: '',
-  name: '',
   role: 'OPERATOR',
 };
 
@@ -81,24 +78,21 @@ const INVITE_ERROR_COPY: Record<string, string> = {
  * sign up) mean genuinely different things for what the admin should do
  * next.
  *
- * `name` is a note for the ADMIN's own reference only — confirmed against
- * `companyMember.service.ts`, it is accepted by the API but never stored on
- * the resulting member row. Since the roster itself carries no display
- * information at all right now (see `interfaces/logistics.ts`), this is the
- * only place that name is ever visible again — shown back in the result
- * panel below, then gone. Worth being upfront about that in the label
- * rather than implying it's saved somewhere.
+ * No longer collects a "name (optional)" note here — the roster now shows
+ * each member's real `displayName`/email straight from their linked
+ * account (see `interfaces/logistics.ts`'s `LogisticsMemberUserRef`), so a
+ * manual, unsaved reminder note is redundant for `LINKED` invites. For
+ * `PENDING` invites there's genuinely no account yet to pull a name from,
+ * so the result panel below identifies them by the masked contact instead.
  */
 export function InviteMemberDialog() {
   const [open, setOpen] = useState(false);
   const [result, setResult] = useState<InviteLogisticsMemberResult | null>(null);
-  const [invitedName, setInvitedName] = useState('');
   const { showToast } = useCustomToast();
   const invite = useInviteLogisticsMember();
 
   const reset = () => {
     setResult(null);
-    setInvitedName('');
     invite.reset();
   };
 
@@ -126,29 +120,22 @@ export function InviteMemberDialog() {
         </DialogHeader>
 
         {result ? (
-          <InviteResultPanel
-            result={result}
-            name={invitedName}
-            onDone={() => setOpen(false)}
-            onInviteAnother={reset}
-          />
+          <InviteResultPanel result={result} onDone={() => setOpen(false)} onInviteAnother={reset} />
         ) : (
           <Formik
             initialValues={INITIAL_VALUES}
             validationSchema={schema}
-            onSubmit={({ contactMethod, contactValue, name, role }) => {
+            onSubmit={({ contactMethod, contactValue, role }) => {
               const value = contactValue.trim();
 
               invite.mutate(
                 {
                   email: contactMethod === 'email' ? value : undefined,
                   phone: contactMethod === 'phone' ? value : undefined,
-                  name: name.trim() || undefined,
                   role,
                 },
                 {
                   onSuccess: (outcome) => {
-                    setInvitedName(name.trim());
                     setResult(outcome);
                   },
                   onError: (error) => {
@@ -201,15 +188,6 @@ export function InviteMemberDialog() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="name">Name (optional)</Label>
-                  <Field as={Input} id="name" name="name" placeholder="For your own reference" />
-                  <p className="text-muted-foreground text-[11px] leading-relaxed">
-                    Not saved anywhere after this — the roster doesn&apos;t show names yet, so jot this
-                    down if you&apos;ll need to recognize them later.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
                   <Label htmlFor="role">Role</Label>
                   <Select
                     value={values.role}
@@ -248,17 +226,15 @@ export function InviteMemberDialog() {
 
 function InviteResultPanel({
   result,
-  name,
   onDone,
   onInviteAnother,
 }: {
   result: InviteLogisticsMemberResult;
-  name: string;
   onDone: () => void;
   onInviteAnother: () => void;
 }) {
   const isLinked = result.outcome === 'LINKED';
-  const who = name || 'This person';
+  const who = isLinked ? result.member.user?.displayName ?? 'This person' : 'This person';
 
   return (
     <div className="space-y-4">

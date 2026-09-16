@@ -318,6 +318,65 @@ export interface ActivatedFactor {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Logistics identifier+password login                                       */
+/*                                                                             */
+/* A third session scope alongside CONSUMER and STAFF (M2 spec, §2). Unlike   */
+/* Staff's two-step OTP flow, `POST auth/logistics/login` is single-step:     */
+/* identifier (email or phone) + password verified and a session issued in   */
+/* one call — mirroring `auth/staff/login`'s structure server-side, not its  */
+/* OTP UX. Gated on an active row in `logistics_company_members`: no active  */
+/* membership answers `403 NO_LOGISTICS_ACCESS` even when the credentials    */
+/* are entirely valid for the person's regular Kumtru account — this        */
+/* endpoint is about portal eligibility, not identity.                       */
+/* -------------------------------------------------------------------------- */
+
+export interface LogisticsLoginPayload {
+  /** Email or phone — the backend looks the account up by either. */
+  identifier: string;
+  password: string;
+  platform?: ClientPlatform;
+  deviceFingerprint?: string;
+}
+
+export type LogisticsPocRole = 'ADMIN' | 'OPERATOR' | (string & {});
+
+/**
+ * The caller's resolved company membership on a LOGISTICS-scoped session.
+ * Mirrors `principal.service.ts`'s `Principal.companyMembership` server-side —
+ * re-resolved fresh on every request, never cached on the token itself, so a
+ * role change or removal takes effect on the caller's next request, not just
+ * their next login. The console only ever holds the snapshot from the login
+ * response.
+ */
+export interface LogisticsAccess {
+  companyId: string;
+  companyName: string;
+  role: LogisticsPocRole;
+}
+
+/**
+ * A session, as issued by `POST auth/logistics/login`.
+ *
+ * Tokens arrive flat, same shape `StaffSession` uses — `toAccess` in
+ * `helpers/session.ts` derives the nested `{ access, refresh }` pair the
+ * store and the `Bearer` interceptor hold.
+ */
+export interface LogisticsSession {
+  accessToken: string;
+  refreshToken: string;
+  /** Access-token lifetime in seconds. */
+  expiresIn: number;
+  tokenType: string;
+  user: IUser;
+  /**
+   * Present on every LOGISTICS-scoped session — there is no such thing as one
+   * without an active company membership, since that's exactly what this
+   * endpoint gates on (`403 NO_LOGISTICS_ACCESS` otherwise).
+   */
+  logistics: LogisticsAccess;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Sign-out                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -353,6 +412,13 @@ interface authStore {
   /** `null` before the first STAFF session lands, or once signed out. */
   staff: StaffAccess | null;
   /**
+   * `null` before the first LOGISTICS session lands, or once signed out.
+   * Mutually exclusive with `staff` in practice — a browser session is
+   * signed in as one scope at a time — but both are modelled independently
+   * since nothing enforces that at the type level.
+   */
+  logistics: LogisticsAccess | null;
+  /**
    * `null` until `admin/me` has been read once — the login response carries no profile.
    *
    * So the first paint after a sign-in shows initials and the username, and the avatar and display name
@@ -372,6 +438,20 @@ export interface IAuthStore extends authStore {
     user: IUser;
     organization?: IOrganization | null;
     staff?: StaffAccess | null;
+    tokens: Access;
+  }) => void;
+  /**
+   * Commits a LOGISTICS-scoped session (`POST auth/logistics/login`) to the
+   * store. Kept separate from `initUserStore`, for the same reason Staff
+   * sign-in is its own endpoint rather than a flag (M2 spec §2, control C2):
+   * keeping the two commit paths distinct makes it structurally clear which
+   * scope a session came from, and means a Logistics login can never
+   * accidentally populate `staff` or vice versa.
+   */
+  initLogisticsStore: (payload: {
+    auth: IAuth;
+    user: IUser;
+    logistics: LogisticsAccess;
     tokens: Access;
   }) => void;
   setAccess: (tokens: Access) => void;

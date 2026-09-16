@@ -33,15 +33,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const signedIn = hydrated && isAuthenticated();
 
   /**
+   * `useSessionSync` re-reads `GET admin/me` — a Staff-only endpoint
+   * (`useOperatorAccount`). A Logistics session has no operator account to
+   * re-read there and no business calling it, so it's gated off for one.
+   */
+  const isLogisticsSession = useAuthStore((state) => Boolean(state.logistics));
+
+  /**
    * The whole-console session refresh, mounted here because this is the one
    * component every module page renders inside — so "on page load" means one
    * read, not one per screen. TanStack Query dedupes it across remounts.
    *
    * Called unconditionally (hooks must be), gated by `enabled`: there is
-   * nothing to re-read before the store has rehydrated, and a signed-out
-   * visitor must not fire an authenticated request at all.
+   * nothing to re-read before the store has rehydrated, a signed-out
+   * visitor must not fire an authenticated request at all, and a Logistics
+   * session has no `admin/me` to read in the first place.
    */
-  useSessionSync({ enabled: signedIn });
+  useSessionSync({ enabled: signedIn && !isLogisticsSession });
 
   // Bounce to sign-in carrying where the operator was headed, so verifying the
   // code lands them here rather than on the default page.

@@ -10,25 +10,33 @@ import { FloatingLabelInput } from '@/components/forms/floating-label-input';
 import { Button } from '@/components/ui/button';
 import { REDIRECT_PARAM, safeRedirectPath } from '@/helpers/redirect';
 import { useCustomToast } from '@/hooks/useCustomToast';
-import { useRequestOtp } from '@/services/auth.services';
+import { useLogisticsLogin } from '@/services/auth.services';
 import { isAuthenticated, useAuthStore } from '@/store/auth.store';
 
+/** `POST auth/logistics/login`'s specific 403 — see M2 spec §2. */
+const NO_LOGISTICS_ACCESS = 'NO_LOGISTICS_ACCESS';
+
 const schema = Yup.object({
-  email: Yup.string().trim().email('Enter a valid work email.').required('Email is required.'),
+  identifier: Yup.string().trim().required('Email or phone is required.'),
+  password: Yup.string().required('Password is required.'),
 });
 
 /**
- * Step 1 of sign-in: ask for the operator's email so the API can mail a code.
+ * Logistics portal sign-in: identifier (email or phone) + password against
+ * `POST auth/logistics/login`.
  *
- * The pending email and the post-login destination travel to step 2 in the URL
- * rather than in a store, so a refresh (or a bookmarked step-2 link) still has
- * everything it needs.
+ * Single step, unlike this console's Staff OTP flow elsewhere in the app —
+ * that flow (`useRequestOtp`/`useVerifyOtp`/`useVerifyMfa`, the `/verify`
+ * screen) is untouched and simply isn't used here. This screen also doubles
+ * as the invitation-acceptance screen for an INVITED logistics POC: there is
+ * no separate accept step or token, a first successful login here is what
+ * activates their company membership server-side.
  */
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showToast } = useCustomToast();
-  const requestOtp = useRequestOtp();
+  const logisticsLogin = useLogisticsLogin();
 
   const redirectTo = safeRedirectPath(searchParams.get(REDIRECT_PARAM));
   const hydrated = useAuthStore((state) => state.hydrated);
@@ -36,18 +44,17 @@ export function LoginForm() {
   /**
    * Why the operator is looking at this screen, when something ejected them here.
    *
-   * Two distinct reasons, and conflating them would mislead:
-   * - `session_expired` — `services/base.ts` after a 401 it could not refresh. Routine: staff sessions
-   *   idle out at 30 minutes and expire absolutely at 8 hours, so landing here mid-shift is expected.
-   * - `account_inactive` — `useSessionSync` after `admin/me` came back with a status that may not
-   *   operate the console. The session was fine; the account changed. Signing in again will not help
-   *   until an administrator reinstates it, so the copy must not invite them to try.
+   * - `session_expired` — `services/base.ts` after a 401 it could not refresh.
+   * - `account_inactive` — `useSessionSync` after a Staff account check came
+   *   back ineligible. Left as-is here for parity with the Staff screen's
+   *   copy; `DashboardShell` only runs that check for a Staff session, so a
+   *   Logistics session won't produce this reason in practice today.
    */
   const reason = searchParams.get('reason');
   const ejected = reason === 'session_expired';
   const inactive = reason === 'account_inactive';
 
-  // A live session has no business on the login screen. Gated on `hydrated`
+  // A live session has no business on the login screen. Gated on hydrated
   // because the token lives in localStorage and is absent during SSR.
   useEffect(() => {
     if (hydrated && isAuthenticated()) router.replace(redirectTo);
@@ -58,7 +65,7 @@ export function LoginForm() {
       <div className="space-y-1.5">
         <h2 className="font-display text-base font-semibold">Sign in</h2>
         <p className="text-muted-foreground text-[12.5px] leading-relaxed">
-          Enter your Komtru email and we&apos;ll send you a one-time code.
+          Sign in with your Komtru email or phone and password.
         </p>
       </div>
 
@@ -82,24 +89,27 @@ export function LoginForm() {
       ) : null}
 
       <Formik
-        initialValues={{ email: '' }}
+        initialValues={{ identifier: '', password: '' }}
         validationSchema={schema}
-        onSubmit={({ email }) => {
-          const normalized = email.trim().toLowerCase();
+        onSubmit={({ identifier, password }) => {
+          const normalized = identifier.trim();
 
-          requestOtp.mutate(
-            { email: normalized },
+          logisticsLogin.mutate(
+            { identifier: normalized, password },
             {
               onSuccess: () => {
-                const query = new URLSearchParams({ email: normalized });
-                if (redirectTo) query.set(REDIRECT_PARAM, redirectTo);
-
-                router.push(`/verify?${query.toString()}`);
+                router.replace(redirectTo);
               },
               onError: (error) => {
+                const isNoAccess = error.errorCode === NO_LOGISTICS_ACCESS;
+
                 showToast({
-                  title: "Couldn't send the code",
-                  description: error.message,
+                  title: isNoAccess
+                    ? "This account can't access the logistics portal"
+                    : "Couldn't sign in",
+                  description: isNoAccess
+                    ? "This account isn't attached to a logistics company."
+                    : error.message,
                   type: 'error',
                 });
               },
@@ -112,16 +122,36 @@ export function LoginForm() {
             <div className="space-y-1.5">
               <Field
                 as={FloatingLabelInput}
-                name="email"
-                type="email"
-                label="Work email"
-                autoComplete="email"
+                name="identifier"
+                type="text"
+                label="Email or phone"
+                autoComplete="username"
                 autoFocus
                 required
-                invalid={Boolean(touched.email && errors.email)}
+                invalid={Boolean(touched.identifier && errors.identifier)}
               />
               <ErrorMessage
-                name="email"
+                name="identifier"
+                render={(message) => (
+                  <p className="text-komtru-risk text-[11.5px]" role="alert">
+                    {message}
+                  </p>
+                )}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Field
+                as={FloatingLabelInput}
+                name="password"
+                type="password"
+                label="Password"
+                autoComplete="current-password"
+                required
+                invalid={Boolean(touched.password && errors.password)}
+              />
+              <ErrorMessage
+                name="password"
                 render={(message) => (
                   <p className="text-komtru-risk text-[11.5px]" role="alert">
                     {message}
@@ -134,10 +164,10 @@ export function LoginForm() {
               type="submit"
               size="xl"
               fullWidth
-              disabled={requestOtp.isPending || !(dirty && isValid)}
+              disabled={logisticsLogin.isPending || !(dirty && isValid)}
             >
-              {requestOtp.isPending ? 'Sending code…' : 'Send code'}
-              {requestOtp.isPending ? null : <ArrowRight aria-hidden />}
+              {logisticsLogin.isPending ? 'Signing in…' : 'Sign in'}
+              {logisticsLogin.isPending ? null : <ArrowRight aria-hidden />}
             </Button>
           </Form>
         )}

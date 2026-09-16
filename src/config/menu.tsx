@@ -1,4 +1,4 @@
-import { LayoutDashboard, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Package, Users, type LucideIcon } from 'lucide-react';
 
 export interface MenuItem {
   id: string;
@@ -23,9 +23,20 @@ export interface MenuSection {
   items?: MenuItem[];
   /**
    * Permission code required to see this entry (or, for a group, to see it
-   * at all before its children are filtered individually).
+   * at all before its children are filtered individually). STAFF-only —
+   * a Logistics session has no `staff.permissions` to check against, so an
+   * entry gated by `permission` is implicitly Staff-only regardless of
+   * `scope`.
    */
   permission?: string;
+  /**
+   * Which session scope may see this entry. Omit for entries visible to
+   * every authenticated session, Staff or Logistics alike (e.g. the
+   * dashboard). `'LOGISTICS'` entries ignore `permission` — that kind of
+   * fine-grained gating is Staff's RBAC model; a Logistics POC's ADMIN vs
+   * OPERATOR split is a separate, screen-level check (see the Team screen).
+   */
+  scope?: 'STAFF' | 'LOGISTICS';
 }
 
 /**
@@ -48,24 +59,51 @@ export const MENU: MenuSection[] = [
     icon: LayoutDashboard,
     href: '/dashboard',
   },
+  {
+    id: 'team',
+    label: 'Team',
+    icon: Users,
+    href: '/team',
+    scope: 'LOGISTICS',
+  },
+  {
+    id: 'packages',
+    label: 'Packages',
+    icon: Package,
+    href: '/packages',
+    scope: 'LOGISTICS',
+  },
 ];
 
 /**
- * Filters MENU down to what a staff session with the given permissions may
- * see. A section with no `permission` is always shown; a section that is a
- * group is shown if it has no `permission` (or the holder has it) AND at
- * least one child survives filtering. `permissions` being `null`/`undefined`
- * (no staff session resolved yet) is treated as "no permissions" so nothing
- * gated is shown prematurely.
+ * Filters MENU down to what a session may see, given its `scope` and (for
+ * STAFF) its held permissions.
+ *
+ * A section is shown if:
+ * - its `scope` (if any) matches the current session's scope, AND
+ * - it has no `permission`, or the holder has it (STAFF permission checks
+ *   only — a LOGISTICS session always passes this half, since `permission`
+ *   is Staff's RBAC model and irrelevant to it),
+ *
+ * and, for a group, at least one child survives the same two checks.
+ *
+ * `permissions` being `null`/`undefined` (no staff session resolved yet) is
+ * treated as "no permissions" so nothing gated is shown prematurely.
+ * `scope` defaults to `'STAFF'` so every existing call site (all of which
+ * predate Logistics sessions) keeps its current behaviour unchanged.
  */
 export function filterMenuByPermissions(
   menu: MenuSection[],
   permissions: readonly string[] | null | undefined,
+  scope: 'STAFF' | 'LOGISTICS' = 'STAFF',
 ): MenuSection[] {
   const held = permissions ?? [];
   const has = (permission?: string): boolean => !permission || held.includes(permission);
+  const inScope = (entryScope?: 'STAFF' | 'LOGISTICS'): boolean =>
+    !entryScope || entryScope === scope;
 
   return menu.reduce<MenuSection[]>((acc, section) => {
+    if (!inScope(section.scope)) return acc;
     if (!has(section.permission)) return acc;
 
     if (section.items) {

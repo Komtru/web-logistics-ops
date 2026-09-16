@@ -229,10 +229,14 @@ function attachResponseInterceptor(instance: AxiosInstance): void {
        * genuinely gone (idle timeout at 30min, absolute at 8h, or the
        * `sessions_epoch` kill switch) and the operator has to sign in again.
        *
-       * Sign-in itself is exempt: a 401 from `auth/staff/login/*` is a bad code,
-       * and there is no session to refresh or discard.
+       * Sign-in itself is exempt: a 401 from `auth/staff/login/*` or
+       * `auth/logistics/login` is a bad-credentials (or NO_LOGISTICS_ACCESS)
+       * response, not an expired session — there is no session yet to
+       * refresh or discard.
        */
-      const isLoginAttempt = originalRequest?.url?.startsWith('auth/staff/login');
+      const isLoginAttempt =
+        originalRequest?.url?.startsWith('auth/staff/login') ||
+        originalRequest?.url?.startsWith('auth/logistics/login');
 
       if (status === UNAUTHORIZED && !isLoginAttempt && originalRequest) {
         if (originalRequest._retry) {

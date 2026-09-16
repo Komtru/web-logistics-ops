@@ -4,6 +4,8 @@ import type {
   ActivatedFactor,
   AuthAck,
   AuthEnvelope,
+  LogisticsLoginPayload,
+  LogisticsSession,
   LogoutPayload,
   MfaVerifyPayload,
   OtpRequestPayload,
@@ -31,6 +33,7 @@ import { useAuthStore } from '@/store/auth.store';
 export const authKeys = {
   all: ['auth'] as const,
   otp: () => [...authKeys.all, 'otp'] as const,
+  logistics: () => [...authKeys.all, 'logistics'] as const,
   logout: () => [...authKeys.all, 'logout'] as const,
   totp: () => [...authKeys.all, 'totp'] as const,
 };
@@ -202,6 +205,50 @@ export function useActivateTotp() {
         body,
       });
       return response.data;
+    },
+  });
+}
+
+/**
+ * Logistics identifier+password sign-in.
+ *
+ * Single step, unlike Staff's two-step OTP flow — `POST auth/logistics/login`
+ * verifies credentials and issues a session in one call (mirrors
+ * `POST auth/staff/login`'s structure server-side per the M2 spec, §2 — same
+ * credential-verification logic — but this console's Staff flow is OTP while
+ * Logistics is password).
+ *
+ * The eligibility check happens after credentials check out: the caller
+ * needs an active row in `logistics_company_members`, or the request 403s
+ * with `errorCode: 'NO_LOGISTICS_ACCESS'` — the credentials can be entirely
+ * valid for the person's regular Kumtru account, this is specifically about
+ * portal eligibility, not identity. Callers branch on `error.errorCode`, not
+ * `error.message`, to detect it.
+ *
+ * This screen also doubles as the invitation-acceptance screen (M2 spec
+ * §2/§8): there is no separate accept step or token — a first successful
+ * login for an INVITED member is what activates them server-side. Nothing
+ * client-side has to know or handle that; it's transparent to this hook.
+ */
+export function useLogisticsLogin() {
+  const initLogisticsStore = useAuthStore((state) => state.initLogisticsStore);
+
+  return useMutation<LogisticsSession, RequestError, LogisticsLoginPayload>({
+    mutationKey: [...authKeys.logistics(), 'login'],
+    mutationFn: async (body) => {
+      const response = await http.post<AuthEnvelope<LogisticsSession>>({
+        url: 'auth/logistics/login',
+        body: { platform: 'WEB', ...body },
+      });
+      return response.data;
+    },
+    onSuccess: (result, variables) => {
+      initLogisticsStore({
+        auth: { id: result.user.userId, email: variables.identifier },
+        user: result.user,
+        logistics: result.logistics,
+        tokens: toAccess(result),
+      });
     },
   });
 }

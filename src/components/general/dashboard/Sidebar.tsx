@@ -56,9 +56,12 @@ export function AppSidebar({ badges }: AppSidebarProps) {
   const isActive = useIsActive();
   const { openSections, toggleSection } = useSidebarStore();
   const staffPermissions = useAuthStore((state) => state.staff?.permissions);
+  const isLogisticsSession = useAuthStore((state) => Boolean(state.logistics));
+  const logistics = useAuthStore((state) => state.logistics);
+  const scope: 'STAFF' | 'LOGISTICS' = isLogisticsSession ? 'LOGISTICS' : 'STAFF';
   const menu = useMemo(
-    () => filterMenuByPermissions(MENU, staffPermissions),
-    [staffPermissions],
+    () => filterMenuByPermissions(MENU, staffPermissions, scope),
+    [staffPermissions, scope],
   );
 
   // The inner pane is transparent so the shell wash shows through; the only
@@ -74,6 +77,19 @@ export function AppSidebar({ badges }: AppSidebarProps) {
           <KomtruMark className="text-komtru-cyan" size={20} />
           <span className="group-data-[collapsible=icon]:hidden">Komtru</span>
         </Link>
+        {isLogisticsSession && logistics && (
+          <div className="mt-2 space-y-0.5">
+            <p className="text-sidebar-foreground/70 text-[10.5px] font-medium">
+              Logistics Company
+            </p>
+            <p className="text-sidebar-foreground text-[12px] font-semibold">
+              {logistics.companyName}
+            </p>
+            <p className="text-sidebar-foreground/55 text-[10px] capitalize">
+              {logistics.role}
+            </p>
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
